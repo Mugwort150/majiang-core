@@ -5,7 +5,7 @@
 
 const Majiang = require('../');
 
-function make_shan(rule, log) {
+function make_shan(rule, log, n) {
 
     function set_qipai(paistr) {
         for (let suitstr of paistr.match(/[mpsz]\d+/g)) {
@@ -24,7 +24,7 @@ function make_shan(rule, log) {
 
     for (let data of log) {
         if (data.qipai) {
-            for (let l = 0; l < 4; l++) { set_qipai(data.qipai.shoupai[l]) }
+            for (let l = 0; l < n; l++) { set_qipai(data.qipai.shoupai[l]) }
             baopai.push(data.qipai.baopai);
         }
         else if (data.zimo)     shan._pai[--zimo_idx] = data.zimo.p;
@@ -77,7 +77,8 @@ class Player {
 module.exports = class Game extends Majiang.Game {
 
     constructor(script, rule) {
-        super([0,1,2,3].map(x=> new Player()), null, rule);
+        const n = (rule && rule['人数']) ?? 4;
+        super(new Array(n).fill(0).map(()=> new Player()), null, rule);
         this._model.title = script.title;
         this._model.player = script.player;
         this._script = script;
@@ -87,10 +88,11 @@ module.exports = class Game extends Majiang.Game {
     }
     qipai() {
         const log = this._script.log.shift();
-        for (let l = 0; l < 4; l++) {
-            let id = (this._model.qijia + this._model.jushu + l) % 4;
+        const n = this._n;
+        for (let l = 0; l < n; l++) {
+            let id = (this._model.qijia + this._model.jushu + l) % n;
             this._players[id]._reply = make_reply(l, log);
         }
-        super.qipai(make_shan(this._rule, log));
+        super.qipai(make_shan(this._rule, log, n));
     }
 }
