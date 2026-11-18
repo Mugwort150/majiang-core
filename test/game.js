@@ -95,6 +95,22 @@ function last_paipu(game, i = 0) {
     return log[log.length - 1 + i];
 }
 
+// テスト用の拡張 Shan: 'bug' を消費牌(公開され手番を消費する牌)として
+// 扱う。アプリ側の BugShan(バグ牌の山)に相当する。
+class BugShan extends Majiang.Shan {
+    is_consumed(p) { return p == 'bug' }
+}
+
+// 対局中の牌山を同じ並びの BugShan に差し替える
+function use_bugshan(game) {
+    const shan = new BugShan(game._rule);
+    shan._pai       = game.model.shan._pai;
+    shan._baopai    = game.model.shan._baopai;
+    shan._fubaopai  = game.model.shan._fubaopai;
+    game.model.shan = shan;
+    return game;
+}
+
 suite('Majiang.Game', ()=>{
 
     test('クラスが存在すること', ()=> assert.ok(Majiang.Game));
@@ -2544,6 +2560,94 @@ suite('Majiang.Game', ()=>{
         test('ノーテン宣言', ()=>{
             let shoupai = Majiang.Shoupai.fromString('m123p456z1122,s789-');
             assert.ok(Majiang.Game.allow_no_daopai(rule, shoupai, 0));
+        });
+    });
+
+    suite('汎用拡張点・安全網', ()=>{
+
+        test('加槓の嶺上が消費牌でも例外とならず、'
+            + '次のツモの前に後乗せのカンドラが開かれること', ()=>{
+            const game = init_game(
+                                {shoupai:['__________,s333=','','',''],
+                                 gangzimo:['bug']});
+            use_bugshan(game);
+            game.zimo();
+            game.gang('s333=3');
+            game.gangzimo();
+            assert.deepEqual(game.model.consumed[0], ['bug']);
+            assert.equal(game.model.shan.baopai.length, 1);
+            game.next();
+            assert.equal(game.model.shan.baopai.length, 2);
+            assert.ok(! game.model.shan._weikaigang);
+            assert.ok(! game._gang);
+            assert.equal(game.model.lunban, 1);
+            assert.ok(last_paipu(game, -1).kaigang);
+            assert.ok(last_paipu(game).zimo);
+        });
+
+        test('大明槓の嶺上が消費牌でも例外とならず、'
+            + '次のツモの前に後乗せのカンドラが開かれること', ()=>{
+            const game = init_game(
+                                {shoupai:['_','','_',''],
+                                 gangzimo:['bug']});
+            use_bugshan(game);
+            game.zimo();
+            game.dapai('s3');
+            game.fulou('s3333=');
+            game.next();
+            assert.deepEqual(game.model.consumed[2], ['bug']);
+            assert.equal(game.model.shan.baopai.length, 1);
+            game.next();
+            assert.equal(game.model.shan.baopai.length, 2);
+            assert.equal(game.model.lunban, 3);
+            assert.ok(last_paipu(game, -1).kaigang);
+            assert.ok(last_paipu(game).zimo);
+        });
+
+        test('牌山が尽きた状態でのツモは荒牌流局となること', ()=>{
+            const game = init_game(
+                                {rule:Majiang.rule({'流し満貫あり':false}),
+                                 shoupai:['_','','','']});
+            game.zimo();
+            while (game.model.shan.paishu) game.model.shan.zimo();
+            game.zimo();
+            assert.equal(last_paipu(game).pingju.name, '荒牌平局');
+        });
+
+        test('牌山が尽きた状態での槓ツモは荒牌流局となること', ()=>{
+            const game = init_game(
+                                {rule:Majiang.rule({'流し満貫あり':false}),
+                                 shoupai:['__________,s333=','','','']});
+            game.zimo();
+            game.gang('s333=3');
+            while (game.model.shan.paishu) game.model.shan.zimo();
+            game.gangzimo();
+            assert.equal(last_paipu(game).pingju.name, '荒牌平局');
+        });
+
+        test('非同期処理中の Shan 例外は捕捉して荒牌流局とすること', (done)=>{
+            const game = init_game(
+                                {rule:Majiang.rule({'流し満貫あり':false})});
+            game._sync = false;
+            game.stop(()=>{
+                assert.equal(last_paipu(game).pingju.name, '荒牌平局');
+                done();
+            });
+            game.delay(()=>{ throw new Error(game.model.shan) });
+        });
+
+        test('対象外の例外は再送出されること', (done)=>{
+            const game = init_game();
+            game._sync = false;
+            const listeners = process.listeners('uncaughtException');
+            process.removeAllListeners('uncaughtException');
+            process.once('uncaughtException', (err)=>{
+                for (let l of listeners)
+                                process.on('uncaughtException', l);
+                assert.equal(err.message, '別の例外');
+                done();
+            });
+            game.delay(()=>{ throw new Error('別の例外') });
         });
     });
 
