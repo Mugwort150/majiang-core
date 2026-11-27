@@ -13,13 +13,7 @@ class LoopTestPlayer extends Majiang.Player {
         const cands = this.get_dapai(this.shoupai);
         this._callback({ dapai: cands[0] });
     }
-    action_dapai(dapai) {
-        if (! this._callback) return;
-        const p = dapai && dapai.dapai ? dapai.dapai.replace(/[\+\=\-]$/,'') : null;
-        if (p && this.allow_hule(this.shoupai.clone().zimo(p), p))
-            return this._callback({ hule: '*' });
-        this._callback({});
-    }
+    action_dapai()   { if (this._callback) this._callback({}) }
     action_fulou()   { if (this._callback) this._callback({}) }
     action_gang()    { if (this._callback) this._callback({}) }
     action_hule()    { if (this._callback) this._callback({}) }
